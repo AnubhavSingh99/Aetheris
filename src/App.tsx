@@ -1,33 +1,52 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { ArrowRight, Sparkles, Info, Sun, Moon, X } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { ArrowRight, Sparkles, Info, Sun, Moon } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import Exa from "exa-js"
 
 const exa = new Exa("45aa7d91-e17e-4a8d-8ffa-5968cd31193a");
+
+interface SearchResult {
+  title: string;
+  text: string;
+  score: number;
+  url: string;
+  publishedDate: string;
+  author?: string;
+}
+
+interface SearchResponse {
+  results: SearchResult[];
+}
 
 export default function Component() {
     const [isFocused, setIsFocused] = useState(false)
     const [inputValue, setInputValue] = useState('')
     const [showSuggestions, setShowSuggestions] = useState(false)
-    const [searchResults, setSearchResults] = useState(null)
+    const [searchResults, setSearchResults] = useState<SearchResponse | null>(null)
     const [isLoading, setIsLoading] = useState(false)
-    const [error, setError] = useState(null)
-    const [darkMode, setDarkMode] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [darkMode, setDarkMode] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('darkMode') === 'true'
+        }
+        return true
+    })
 
     const [showAbout, setShowAbout] = useState(false);
     const [showContact, setShowContact] = useState(false);
 
     const [currentPage, setCurrentPage] = useState(1);
     const [resultsPerPage] = useState(5);
-    const [sortOption, setSortOption] = useState('relevance');
+    const [sortOption, setSortOption] = useState<'relevance' | 'date'>('relevance');
 
-    const suggestions = ['Explore the cosmos with LLM', 'What are neural networks?', 'Explain quantum computing in simple terms']
+    const suggestions = useMemo(() => ['Explore the cosmos with LLM', 'What are neural networks?', 'Explain quantum computing in simple terms'], []);
 
     useEffect(() => {
-        let timer
+        let timer: NodeJS.Timeout
         if (isFocused) {
             timer = setTimeout(() => setShowSuggestions(true), 300)
         } else {
@@ -36,7 +55,12 @@ export default function Component() {
         return () => clearTimeout(timer)
     }, [isFocused])
 
-    const handleSearch = async (e) => {
+    useEffect(() => {
+        document.documentElement.classList.toggle('dark', darkMode)
+        localStorage.setItem('darkMode', darkMode.toString())
+    }, [darkMode])
+
+    const handleSearch = useCallback(async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
         setIsLoading(true)
         setShowSuggestions(false)
@@ -53,7 +77,7 @@ export default function Component() {
                 }
             )
             console.log("Exa API response:", result);
-            setSearchResults(result);
+            setSearchResults(result as SearchResponse);
             setCurrentPage(1);
         } catch (error) {
             console.error('Error performing search:', error)
@@ -62,32 +86,33 @@ export default function Component() {
         } finally {
             setIsLoading(false)
         }
-    }
+    }, [inputValue])
 
-    const toggleDarkMode = () => {
-        setDarkMode(!darkMode);
-        document.documentElement.classList.toggle('dark', !darkMode);
-    }
+    const toggleDarkMode = useCallback(() => {
+        setDarkMode(prevMode => !prevMode);
+    }, [])
 
     const indexOfLastResult = currentPage * resultsPerPage;
     const indexOfFirstResult = indexOfLastResult - resultsPerPage;
     const currentResults = searchResults ? searchResults.results.slice(indexOfFirstResult, indexOfLastResult) : [];
 
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+    const paginate = useCallback((pageNumber: number) => setCurrentPage(pageNumber), []);
 
-    const sortResults = (option) => {
+    const sortResults = useCallback((option: 'relevance' | 'date') => {
         setSortOption(option);
-        const sortedResults = [...searchResults.results];
+        if (searchResults) {
+            const sortedResults = [...searchResults.results];
 
-        if (option === 'date') {
-            sortedResults.sort((a, b) => new Date(b.publishedDate) - new Date(a.publishedDate));
-        } else if (option === 'relevance') {
-            sortedResults.sort((a, b) => b.score - a.score);
+            if (option === 'date') {
+                sortedResults.sort((a, b) => new Date(b.publishedDate).getTime() - new Date(a.publishedDate).getTime());
+            } else if (option === 'relevance') {
+                sortedResults.sort((a, b) => b.score - a.score);
+            }
+
+            setSearchResults({ ...searchResults, results: sortedResults });
+            setCurrentPage(1);
         }
-
-        setSearchResults({ ...searchResults, results: sortedResults });
-        setCurrentPage(1);
-    }
+    }, [searchResults])
 
     return (
         <div className={`min-h-screen flex flex-col items-center justify-between p-4 overflow-hidden ${darkMode ? 'bg-gradient-to-br from-gray-900 to-black' : 'bg-gradient-to-br from-blue-100 to-white'}`}>
@@ -95,11 +120,11 @@ export default function Component() {
             <nav className="w-full max-w-5xl flex items-center justify-between mb-6 py-4">
                 <div className={`text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Aetheris Search</div>
                 <div className="flex items-center space-x-4">
-                    <a href="#" className={`${darkMode ? 'text-white' : 'text-gray-800'} hover:text-blue-400 transition-colors`} onClick={() => setShowAbout(true)}>About</a>
-                    <a href="#" className={`${darkMode ? 'text-white' : 'text-gray-800'} hover:text-blue-400 transition-colors`} onClick={() => setShowContact(true)}>Contact</a>
-                    <button onClick={toggleDarkMode} className={`${darkMode ? 'text-white' : 'text-gray-800'} hover:text-blue-400 transition-colors`}>
+                    <Button variant="ghost" className={`${darkMode ? 'text-white' : 'text-gray-800'} hover:text-blue-400 transition-colors`} onClick={() => setShowAbout(true)}>About</Button>
+                    <Button variant="ghost" className={`${darkMode ? 'text-white' : 'text-gray-800'} hover:text-blue-400 transition-colors`} onClick={() => setShowContact(true)}>Contact</Button>
+                    <Button variant="ghost" onClick={toggleDarkMode} className={`${darkMode ? 'text-white' : 'text-gray-800'} hover:text-blue-400 transition-colors`} aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}>
                         {darkMode ? <Sun size={24} /> : <Moon size={24} />}
-                    </button>
+                    </Button>
                 </div>
             </nav>
 
@@ -133,6 +158,7 @@ export default function Component() {
                             animate={isFocused ? { x: 4, rotate: 0 } : { x: 0, rotate: 360 }}
                             transition={{ duration: 0.5 }}
                             className={`absolute right-6 top-1/2 transform -translate-y-1/2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}
+                            aria-label="Search"
                         >
                             {isLoading ? (
                                 <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-400"></div>
@@ -179,9 +205,26 @@ export default function Component() {
                     </div>
                 ) : searchResults ? (
                     <>
-                        <div className="flex justify-between mb-4">
-                            <button onClick={() => sortResults('date')} className={`text-xs py-1 px-3 ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-800'} rounded-lg transition-colors hover:bg-blue-400`}>Sort by Date</button>
-                            <button onClick={() => sortResults('relevance')} className={`text-xs py-1 px-3 ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-800'} rounded-lg transition-colors hover:bg-blue-400`}>Sort by Relevance</button>
+                        <div className="flex justify-between items-center mb-4">
+                            <div className={`text-sm ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+                                Sorted by: <span className="font-semibold">{sortOption}</span>
+                            </div>
+                            <div className="flex space-x-2">
+                                <Button 
+                                    onClick={() => sortResults('date')} 
+                                    variant={sortOption === 'date' ? "default" : "outline"} 
+                                    size="sm"
+                                >
+                                    Date
+                                </Button>
+                                <Button 
+                                    onClick={() => sortResults('relevance')} 
+                                    variant={sortOption === 'relevance' ? "default" : "outline"} 
+                                    size="sm"
+                                >
+                                    Relevance
+                                </Button>
+                            </div>
                         </div>
                         {currentResults.map((result, index) => (
                             <div key={index} className={`mb-6 last:mb-0 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
@@ -203,14 +246,16 @@ export default function Component() {
 
                         {/* Pagination */}
                         <div className="flex justify-center mt-6">
-                            {Array(Math.ceil(searchResults.results.length / resultsPerPage)).fill().map((_, i) => (
-                                <button
+                            {Array.from({length: Math.ceil((searchResults?.results.length || 0) / resultsPerPage)}).map((_, i) => (
+                                <Button
                                     key={i}
                                     onClick={() => paginate(i + 1)}
-                                    className={`px-3 py-1 mx-2 ${darkMode ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-800'} rounded-lg transition-colors hover:bg-blue-400 ${currentPage === i + 1 ? 'bg-blue-500 text-white' : ''}`}
+                                    variant={currentPage === i + 1 ? "default" : "outline"}
+                                    size="sm"
+                                    className="mx-1"
                                 >
                                     {i + 1}
-                                </button>
+                                </Button>
                             ))}
                         </div>
                     </>
@@ -249,12 +294,12 @@ export default function Component() {
                                 allowing it to provide more relevant and insightful results.
                             </p>
                             <p className="mb-4">
-                                With Aetheris Search, you're not just searching with keywords—you’re exploring the
+                                With Aetheris Search, you're not just searching with keywords—you're exploring the
                                 vast cosmos of information with the help of advanced AI!
                             </p>
-                            <button className={`mt-4 px-4 py-2 ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white rounded-lg transition-colors`} onClick={() => setShowAbout(false)}>
+                            <Button onClick={() => setShowAbout(false)}>
                                 Close
-                            </button>
+                            </Button>
                         </motion.div>
                     </motion.div>
                 )}
@@ -278,7 +323,7 @@ export default function Component() {
                         >
                             <h2 className="text-2xl font-semibold mb-4">Contact Us</h2>
                             <p className="mb-4">Feel free to reach out to us at <strong>singhanubhav7456@gmail.com</strong> or call us at <strong>+91 7088963373</strong>.</p>
-                            <button className={`mt-4 px-4 py-2 ${darkMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-500 hover:bg-blue-600'} text-white rounded-lg transition-colors`} onClick={() => setShowContact(false)}>Close</button>
+                            <Button onClick={() => setShowContact(false)}>Close</Button>
                         </motion.div>
                     </motion.div>
                 )}
@@ -291,7 +336,7 @@ export default function Component() {
             </footer>
 
             {/* Background Animation */}
-            {[...Array(50)].map((_, i) => (
+            {Array.from({length: 50}).map((_, i) => (
                 <motion.div
                     key={i}
                     className={`absolute w-1 h-1 ${darkMode ? 'bg-blue-400' : 'bg-blue-600'} rounded-full`}
